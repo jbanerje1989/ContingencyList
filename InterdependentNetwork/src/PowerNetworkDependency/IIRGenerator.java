@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.Scanner;
 
 // Refer the corresponding MATLAB file for format of the data retrieved
-// Author: Joydeep Banerje
+// Author: Joydeep Banerjee
 
 public class IIRGenerator {
 	
