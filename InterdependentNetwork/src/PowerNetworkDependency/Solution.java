@@ -54,7 +54,6 @@ public class Solution {
             });
             int maxVal = 0;
             long returnVal = 0;
-            int index = 0;
             for(Solution s: sol){
                 long currentVal = 0;
                 for(int i = 1; i < s.numClusters; i++) currentVal += i * (i+1);
@@ -62,10 +61,11 @@ public class Solution {
                 returnVal += currentVal;
                 returnVal += ((long) maxVal * (long) s.numEdges);
                 maxVal += (s.numClusters-1) * s.numClusters;   
-                index++;
             }
             System.out.println(returnVal);
         }
+        scan.close();
+        in.close();
     }
     
     public static void DFS(ArrayList<ArrayList<Integer>> edges, boolean[] disc, int vertex, ArrayList<Integer> cluster){
