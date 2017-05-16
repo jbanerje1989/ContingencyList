@@ -11,5 +11,6 @@
 	<classpathentry kind="lib" path="/Users/joydeepbanerjee/Dropbox/papers/WorkUnderProgress/CRITIS2017/Paper Code/ContingencyListCode/jarFiles/matlabcontrol-4.1.0-sources.jar"/>
 	<classpathentry kind="lib" path="/Users/joydeepbanerjee/Dropbox/papers/WorkUnderProgress/CRITIS2017/Paper Code/ContingencyListCode/jarFiles/matlabcontrol-4.1.0.jar"/>
 	<classpathentry kind="lib" path="/Users/joydeepbanerjee/Dropbox/papers/WorkUnderProgress/CRITIS2017/Paper Code/ContingencyListCode/jarFiles/matlabcontrol-demo-4.1.0.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.junit.JUNIT_CONTAINER/4"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

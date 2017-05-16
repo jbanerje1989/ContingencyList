@@ -25,6 +25,7 @@ public class IIRGenerator {
 	private HashMap<String, Integer> entityMapRev; // maintains a map of entityID to bus number
 	private HashMap<Integer, String> transMap; // maintains a map of transmission line to entityID
 	private HashMap<String, Integer> transMapRev; // maintains a map of entityID to transmission line
+	private HashMap<String, List<String>> transLine; // entities connecting a transmission line
 	
 	// maintains the adjacency list for flow between buses based on
 	private ArrayList<ArrayList<Integer>> flowListReal; 
@@ -35,10 +36,14 @@ public class IIRGenerator {
 	 * For buses it contains five values --- Load demand, Generation Capacity Max, Actual Generated, Power Input, Power Output
 	 * (Following the given order)
 	 */
-	HashMap<String, List<Double>> componentBoundAndValuesReal;
+	HashMap<String, List<Integer>> componentBoundAndValuesReal;
+	HashMap<String, Integer> transFlow = new HashMap<String, Integer>();
+	HashMap<String, Integer> transCap = new HashMap<String, Integer>();
 	
 	// voltage measurement at a given time step (the inverse flow direction is maintained for IIR generation)
 	private HashMap<String, List<List<String>>> IIRSol = new HashMap<String, List<List<String>>>();
+	private HashMap<String, List<String>> busInputLines = new HashMap<String, List<String>>();
+	private HashMap<String, List<String>> busOutputLines = new HashMap<String, List<String>>();
 	// --------------------------------------------------------------------------------- //
 	
 	// --------------------------------------------------------------------------------- //
@@ -68,7 +73,7 @@ public class IIRGenerator {
 		// variable for mapping busId with index and reverse
 		busNumToIndexMap = new HashMap<Integer, Integer>();
 		busIndexToNumMap = new HashMap<Integer, Integer>();
-		componentBoundAndValuesReal = new HashMap<String, List<Double>>();
+		componentBoundAndValuesReal = new HashMap<String, List<Integer>>();
 		
 		// create map of buses with entity IDs
 		entityMap = new HashMap<Integer, String>();
@@ -85,29 +90,35 @@ public class IIRGenerator {
 			busIndexToNumMap.put(i, busID);
 			
 			int busType = (int) scan.nextDouble();
-			double busLoadReal = scan.nextDouble();
-			double busLoadImag = scan.nextDouble();
-			double busGenMaxReal = scan.nextDouble();
-			double busGenActualReal = scan.nextDouble();
+			int busLoadReal = (int) scan.nextDouble();
+			int busLoadImag = (int) scan.nextDouble();
+			int busGenMaxReal = (int) scan.nextDouble();
+			int busGenActualReal = (int) scan.nextDouble();
 			
-			if((int) busLoadReal == 0 && (int) busLoadImag == 0 && busType == 1){
+			if(busLoadReal == 0 && (int) busLoadImag == 0 && busType == 1){
 				entityMap.put(i, "N" + indexNeutral);
 				entityMapRev.put("N" + indexNeutral, i);
+				busInputLines.put("N" + indexNeutral, new ArrayList<String>());
+				busOutputLines.put("N" + indexNeutral, new ArrayList<String>());
 				indexNeutral ++;
 			}
 			else if(busType == 2 || busType == 3){
 				entityMap.put(i, "G" + indexGen);
 				entityMapRev.put("G" + indexGen, i);
+				busInputLines.put("G" + indexGen, new ArrayList<String>());
+				busOutputLines.put("G" + indexGen, new ArrayList<String>());
 				indexGen ++;
 			}
 			else if(busType == 1){
 				entityMap.put(i, "L" + indexLoad);
 				entityMapRev.put("L" + indexLoad, i);
+				busInputLines.put("L" + indexLoad, new ArrayList<String>());
+				busOutputLines.put("L" + indexLoad, new ArrayList<String>());
 				indexLoad ++;
 			}
 			
 			componentBoundAndValuesReal.put(entityMap.get(i), 
-					Arrays.asList(busLoadReal, busGenMaxReal, busGenActualReal, 0.0, 0.0));
+					Arrays.asList(busLoadReal, busGenMaxReal, busGenActualReal, 0, 0));
 		}
 			
 		/// get the edges and corresponding power flow corresponding to index
@@ -118,11 +129,13 @@ public class IIRGenerator {
 		
 		transMap = new HashMap<Integer, String>();
 		transMapRev = new HashMap<String, Integer>();
+		transLine = new HashMap<String, List<String>>();
+		
 		for(int i = 0; i < numBranch; i++){
 			int firstNode = (int) scan.nextDouble();
 			int secondNode = (int) scan.nextDouble();
-			double powerRealFirstSecond = 100 * scan.nextDouble();
-			double powerRealSecondFirst = 100 * scan.nextDouble();
+			int powerRealFirstSecond = 100 * (int) scan.nextDouble();
+			int powerRealSecondFirst = 100 * (int) scan.nextDouble();
 			
 			int edge1 = busNumToIndexMap.get(firstNode);
 			int edge2 = busNumToIndexMap.get(secondNode);
@@ -139,24 +152,32 @@ public class IIRGenerator {
 			// get the real power flow and populate bound and values
 			if(powerRealFirstSecond > powerRealSecondFirst){
 				flowListReal.get(edge2).add(edge1);
-				componentBoundAndValuesReal.put(transMap.get(Integer.parseInt(line2)), 
-						Arrays.asList(transCapConst * -powerRealSecondFirst));
+				transFlow.put(transMap.get(Integer.parseInt(line2)), 
+						- powerRealSecondFirst);
+				transCap.put(transMap.get(Integer.parseInt(line2)), 
+						(int) (transCapConst * (- powerRealSecondFirst)));
+				transLine.put(transMap.get(Integer.parseInt(line2)), 
+						Arrays.asList(entityMap.get(edge1), entityMap.get(edge2)));
 				
-				List<Double> node1Vals = componentBoundAndValuesReal.get(entityMap.get(edge1));
+				List<Integer> node1Vals = componentBoundAndValuesReal.get(entityMap.get(edge1));
 				node1Vals.set(4, node1Vals.get(4) + powerRealFirstSecond);
 				
-				List<Double> node2Vals = componentBoundAndValuesReal.get(entityMap.get(edge2));
+				List<Integer> node2Vals = componentBoundAndValuesReal.get(entityMap.get(edge2));
 				node2Vals.set(3, node2Vals.get(3) - powerRealSecondFirst);
 			}
 			else{
 				flowListReal.get(edge1).add(edge2);
-				componentBoundAndValuesReal.put(transMap.get(Integer.parseInt(line1)), 
-						Arrays.asList(transCapConst * -powerRealFirstSecond));
+				transFlow.put(transMap.get(Integer.parseInt(line1)), 
+						-powerRealFirstSecond);
+				transCap.put(transMap.get(Integer.parseInt(line1)), 
+						(int) (transCapConst * (- powerRealFirstSecond)));
+				transLine.put(transMap.get(Integer.parseInt(line1)), 
+						Arrays.asList(entityMap.get(edge2), entityMap.get(edge1)));
 				
-				List<Double> node1Vals = componentBoundAndValuesReal.get(entityMap.get(edge1));
+				List<Integer> node1Vals = componentBoundAndValuesReal.get(entityMap.get(edge1));
 				node1Vals.set(3, node1Vals.get(3) - powerRealFirstSecond);
 				
-				List<Double> node2Vals = componentBoundAndValuesReal.get(entityMap.get(edge2));
+				List<Integer> node2Vals = componentBoundAndValuesReal.get(entityMap.get(edge2));
 				node2Vals.set(4, node2Vals.get(4) + powerRealSecondFirst);
 				
 			}
@@ -176,6 +197,10 @@ public class IIRGenerator {
 			List<List<String>> minterm = new ArrayList<List<String>>();
 			for(int adjBus: flowList.get(bus)){
 				String line = Integer.toString(bus) + Integer.toString(adjBus);
+				List<String> toBus = busInputLines.get(entityMap.get(bus));
+				List<String> fromBus = busOutputLines.get(entityMap.get(adjBus));
+				toBus.add(transMap.get(Integer.parseInt(line)));
+				fromBus.add(transMap.get(Integer.parseInt(line)));
 				minterm.add(Arrays.asList(transMap.get(Integer.parseInt(line)), entityMap.get(adjBus))); 
 			}
 			if(entityMap.get(bus).charAt(0) == 'G') minterm.add(Arrays.asList(entityMap.get(bus)));
@@ -188,7 +213,12 @@ public class IIRGenerator {
 	// Getter Files
 	public HashMap<String, Integer> getMaps() { return entityMapRev;}
 	public HashMap<String, List<List<String>>> getIIRSol() { return IIRSol;}
-	public HashMap<String, List<Double>> getComponentBoundAndValuesReal() { return componentBoundAndValuesReal;}
+	public HashMap<String, List<Integer>> getComponentBoundAndValuesReal() { return componentBoundAndValuesReal;}
+	public HashMap<String, Integer> getTransFlow() { return transFlow;}
+	public HashMap<String, Integer> getTransCap() { return transCap;}
+	public HashMap<String, List<String>> getToBus() { return busInputLines;}
+	public HashMap<String, List<String>> getFromBus() { return busOutputLines;}
+	public HashMap<String, List<String>> getTransLine() { return transLine;}
 	// --------------------------------------------------------------------------------- //
 	
 }

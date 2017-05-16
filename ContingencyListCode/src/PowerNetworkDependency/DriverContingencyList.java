@@ -5,7 +5,7 @@ import java.io.IOException;
 public class DriverContingencyList {
 	public static void main(String[] args) throws IOException{
 		String caseFile = "case118";
-		int K = 10;
+		int K = 5;
 		
 		long startTime = System.nanoTime();
 		IIRGenerator obj = new IIRGenerator(caseFile, 1);
@@ -33,5 +33,6 @@ public class DriverContingencyList {
 		
 		System.out.println("Total Entities Failed: " +  Object.getFailedEntitiesCount());
 		System.out.println("Contingency List: " + Object.getInitFailedEntities());
+		System.out.println("Contingency List: " + Object.getFailedEntities());
 	}
 }
