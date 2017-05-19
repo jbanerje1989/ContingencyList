@@ -8,7 +8,7 @@
 	<classpathentry kind="lib" path="/Users/joydeepbanerjee/Dropbox/papers/WorkUnderProgress/CRITIS2017/Paper Code/ContingencyList/jarFiles/matlabcontrol-demo-4.1.0.jar"/>
 	<classpathentry kind="lib" path="/Users/joydeepbanerjee/Applications/IBM/ILOG/CPLEX_Studio1263/cplex/lib/cplex.jar">
 		<attributes>
-			<attribute name="org.eclipse.jdt.launching.CLASSPATH_ATTR_LIBRARY_PATH_ENTRY" value="/Users/joydeepbanerjee/Applications/IBM/ILOG/CPLEX_Studio1263/cplex/lib/x86-64_osx"/>
+			<attribute name="org.eclipse.jdt.launching.CLASSPATH_ATTR_LIBRARY_PATH_ENTRY" value="/Users/joydeepbanerjee/Applications/IBM/ILOG/CPLEX_Studio1263/cplex/bin/x86-64_osx"/>
 		</attributes>
 	</classpathentry>
 	<classpathentry kind="output" path="bin"/>

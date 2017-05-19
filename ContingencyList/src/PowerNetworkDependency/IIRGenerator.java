@@ -1,9 +1,10 @@
 package PowerNetworkDependency;
-// Author: Joydeep
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Scanner;
 import java.util.List;
@@ -15,6 +16,7 @@ public class IIRGenerator {
 	private final int numBuses;
 	private final int numTimeSteps;
 	private final int numBranch;
+	private int totalComp;
 	
 	// the constant multiplied with transmission line flow to get the upper bound on the line
 	private final double transCapConst = 1.5; 
@@ -25,25 +27,23 @@ public class IIRGenerator {
 	private HashMap<String, Integer> entityMapRev; // maintains a map of entityID to bus number
 	private HashMap<Integer, String> transMap; // maintains a map of transmission line to entityID
 	private HashMap<String, Integer> transMapRev; // maintains a map of entityID to transmission line
-	private HashMap<String, List<String>> transLine; // entities connecting a transmission line
+	private HashMap<String, List<String>> transLine; // pair of entities connected by a transmission line (outEntity, inEntity)
 	
 	// maintains the adjacency list for flow between buses based on
 	private ArrayList<ArrayList<Integer>> flowListReal; 
 	
-	// maintains the bound and values for the components in the power network
-	/*
-	 * For transmission lines just stores the bound of the line
-	 * For buses it contains five values --- Load demand, Generation Capacity Max, Actual Generated, Power Input, Power Output
-	 * (Following the given order)
-	 */
-	HashMap<String, List<Integer>> componentBoundAndValuesReal;
-	HashMap<String, Integer> transFlow = new HashMap<String, Integer>();
-	HashMap<String, Integer> transCap = new HashMap<String, Integer>();
+	// current value and bound on the entities
+	HashMap<String, Integer> entityPowerVal;
+	HashMap<String, Integer> entityPowerBound;
 	
 	// voltage measurement at a given time step (the inverse flow direction is maintained for IIR generation)
 	private HashMap<String, List<List<String>>> IIRSol = new HashMap<String, List<List<String>>>();
-	private HashMap<String, List<String>> busInputLines = new HashMap<String, List<String>>();
-	private HashMap<String, List<String>> busOutputLines = new HashMap<String, List<String>>();
+	
+	// list of transmission line entities going in and coming out of an entity
+	private HashMap<String, List<String>> busInputLines;
+	private HashMap<String, List<String>> busOutputLines;
+	
+	List<Integer> vertex;
 	// --------------------------------------------------------------------------------- //
 	
 	// --------------------------------------------------------------------------------- //
@@ -73,17 +73,38 @@ public class IIRGenerator {
 		// variable for mapping busId with index and reverse
 		busNumToIndexMap = new HashMap<Integer, Integer>();
 		busIndexToNumMap = new HashMap<Integer, Integer>();
-		componentBoundAndValuesReal = new HashMap<String, List<Integer>>();
+		busInputLines = new HashMap<String, List<String>>();
+		busOutputLines = new HashMap<String, List<String>>();
+		entityPowerVal = new HashMap<String, Integer>();
+		entityPowerBound = new HashMap<String, Integer>();
 		
 		// create map of buses with entity IDs
 		entityMap = new HashMap<Integer, String>();
 		entityMapRev = new HashMap<String, Integer>();
+		
+		transMap = new HashMap<Integer, String>();
+		transMapRev = new HashMap<String, Integer>();
+		transLine = new HashMap<String, List<String>>();
+		
+		/// get the edges and corresponding power flow corresponding to index
+		flowListReal = new ArrayList<ArrayList<Integer>>();
+		for(int i = 0; i < numBuses; i++){
+			flowListReal.add(new ArrayList<Integer>());
+		}
+		
+		// map for holding generator bus to auxiliary entity map
+		HashMap<String, String> genToAuxMap = new HashMap<String, String>();
+		
 		int indexGen = 1;
 		int indexLoad = 1;
 		int indexNeutral = 1;
+		int indexAuxBus = numBuses;
+		int indexAuxBranch = numBranch;
 		
+		vertex = new ArrayList<Integer>();
 		// Load bus data, load and generator values in class variable
-		for(int i = 0; i < numBuses; i++){
+		for(int i = 0; i < numBuses; ++i){
+			vertex.add(i);
 			// map the busID with index and reverse for processing
 			int busID = (int) scan.nextDouble();
 			busNumToIndexMap.put(busID, i);
@@ -92,7 +113,7 @@ public class IIRGenerator {
 			int busType = (int) scan.nextDouble();
 			int busLoadReal = (int) scan.nextDouble();
 			int busLoadImag = (int) scan.nextDouble();
-			int busGenMaxReal = (int) scan.nextDouble();
+			int busGenMaxReal = (int) (scan.nextDouble()/0.8);
 			int busGenActualReal = (int) scan.nextDouble();
 			
 			if(busLoadReal == 0 && (int) busLoadImag == 0 && busType == 1){
@@ -100,13 +121,57 @@ public class IIRGenerator {
 				entityMapRev.put("N" + indexNeutral, i);
 				busInputLines.put("N" + indexNeutral, new ArrayList<String>());
 				busOutputLines.put("N" + indexNeutral, new ArrayList<String>());
+				entityPowerVal.put(entityMap.get(i), 0);
+				entityPowerBound.put(entityMap.get(i), 0);
 				indexNeutral ++;
 			}
 			else if(busType == 2 || busType == 3){
 				entityMap.put(i, "G" + indexGen);
 				entityMapRev.put("G" + indexGen, i);
+				
+				// create auxiliary entity for the generator bus
+				if(busLoadImag == 0){
+					busIndexToNumMap.put(indexAuxBus, indexAuxBus);
+					entityMap.put(indexAuxBus, "N" + indexNeutral);
+					entityMapRev.put("N" + indexNeutral, indexAuxBus);
+					busInputLines.put("N" + indexNeutral, new ArrayList<String>());
+					busOutputLines.put("N" + indexNeutral, new ArrayList<String>());
+					entityPowerVal.put(entityMap.get(indexAuxBus), 0);
+					entityPowerBound.put(entityMap.get(indexAuxBus), 0);
+					genToAuxMap.put("G" + indexGen, "N" + indexNeutral);
+					indexNeutral ++;
+				}
+				else{
+					busIndexToNumMap.put(indexAuxBus, indexAuxBus);
+					entityMap.put(indexAuxBus, "L" + indexLoad);
+					entityMapRev.put("L" + indexLoad, indexAuxBus);
+					busInputLines.put("L" + indexLoad, new ArrayList<String>());
+					busOutputLines.put("L" + indexLoad, new ArrayList<String>());
+					entityPowerVal.put(entityMap.get(indexAuxBus), busLoadReal);
+					entityPowerBound.put(entityMap.get(indexAuxBus), busLoadReal);
+					genToAuxMap.put("G" + indexGen, "L" + indexLoad);
+					indexLoad ++;
+				}
+				
+				String line = Integer.toString(i) + Integer.toString(indexAuxBus);
+				transMap.put(Integer.parseInt(line), "T" + indexAuxBranch);
+				transMapRev.put( "T" + indexAuxBranch , Integer.parseInt(line));
+				entityPowerVal.put(transMap.get(Integer.parseInt(line)), 
+						busGenActualReal);
+				entityPowerBound.put(transMap.get(Integer.parseInt(line)), 
+						(int) (busGenActualReal * transCapConst));
+				transLine.put(transMap.get(Integer.parseInt(line)), 
+						Arrays.asList(entityMap.get(i), entityMap.get(indexAuxBus)));
+				flowListReal.add(new ArrayList<Integer>());
+				flowListReal.get(indexAuxBus).add(i);
+				indexAuxBranch ++;
+				vertex.add(indexAuxBus);
+				indexAuxBus ++;
+				
 				busInputLines.put("G" + indexGen, new ArrayList<String>());
 				busOutputLines.put("G" + indexGen, new ArrayList<String>());
+				entityPowerVal.put(entityMap.get(i), busGenActualReal);
+				entityPowerBound.put(entityMap.get(i), busGenMaxReal);
 				indexGen ++;
 			}
 			else if(busType == 1){
@@ -114,75 +179,83 @@ public class IIRGenerator {
 				entityMapRev.put("L" + indexLoad, i);
 				busInputLines.put("L" + indexLoad, new ArrayList<String>());
 				busOutputLines.put("L" + indexLoad, new ArrayList<String>());
+				entityPowerVal.put(entityMap.get(i), busLoadReal);
+				entityPowerBound.put(entityMap.get(i), busLoadReal);
 				indexLoad ++;
 			}
-			
-			componentBoundAndValuesReal.put(entityMap.get(i), 
-					Arrays.asList(busLoadReal, busGenMaxReal, busGenActualReal, 0, 0));
 		}
-			
-		/// get the edges and corresponding power flow corresponding to index
-		flowListReal = new ArrayList<ArrayList<Integer>>();
-		for(int i = 0; i < numBuses; i++){
-			flowListReal.add(new ArrayList<Integer>());
-		}
-		
-		transMap = new HashMap<Integer, String>();
-		transMapRev = new HashMap<String, Integer>();
-		transLine = new HashMap<String, List<String>>();
 		
 		for(int i = 0; i < numBranch; i++){
 			int firstNode = (int) scan.nextDouble();
 			int secondNode = (int) scan.nextDouble();
-			int powerRealFirstSecond = 100 * (int) scan.nextDouble();
-			int powerRealSecondFirst = 100 * (int) scan.nextDouble();
+			int powerRealFirstSecond = (int) (100.0 *  scan.nextDouble());
+			int powerRealSecondFirst = (int) (100.0 *  scan.nextDouble());
+			int edge1, edge2;
 			
-			int edge1 = busNumToIndexMap.get(firstNode);
-			int edge2 = busNumToIndexMap.get(secondNode);
+			if(entityMap.get(busNumToIndexMap.get(firstNode)).charAt(0) == 'G'){
+				String entity = entityMap.get(busNumToIndexMap.get(firstNode));
+				String auxEntity = genToAuxMap.get(entity);
+				edge1 = entityMapRev.get(auxEntity);
+			}
+			else
+				edge1 = busNumToIndexMap.get(firstNode);
+			
+			if(entityMap.get(busNumToIndexMap.get(secondNode)).charAt(0) == 'G'){
+				String entity = entityMap.get(busNumToIndexMap.get(secondNode));
+				String auxEntity = genToAuxMap.get(entity);
+				edge2 = entityMapRev.get(auxEntity);
+			}
+			else
+				edge2 = busNumToIndexMap.get(secondNode);
+			
 			String line1 = Integer.toString(edge1) + Integer.toString(edge2);
 			String line2 = Integer.toString(edge2) + Integer.toString(edge1);
 			
-			if(!transMap.containsKey(Integer.parseInt(line1))){
-				transMap.put(Integer.parseInt(line1), "T" + i);
-				transMapRev.put( "T" + i , Integer.parseInt(line1));
-				transMap.put(Integer.parseInt(line2), "T" + i);
-				transMapRev.put( "T" + i , Integer.parseInt(line2));
-			}
-			
 			// get the real power flow and populate bound and values
 			if(powerRealFirstSecond > powerRealSecondFirst){
-				flowListReal.get(edge2).add(edge1);
-				transFlow.put(transMap.get(Integer.parseInt(line2)), 
-						- powerRealSecondFirst);
-				transCap.put(transMap.get(Integer.parseInt(line2)), 
-						(int) (transCapConst * (- powerRealSecondFirst)));
-				transLine.put(transMap.get(Integer.parseInt(line2)), 
-						Arrays.asList(entityMap.get(edge1), entityMap.get(edge2)));
-				
-				List<Integer> node1Vals = componentBoundAndValuesReal.get(entityMap.get(edge1));
-				node1Vals.set(4, node1Vals.get(4) + powerRealFirstSecond);
-				
-				List<Integer> node2Vals = componentBoundAndValuesReal.get(entityMap.get(edge2));
-				node2Vals.set(3, node2Vals.get(3) - powerRealSecondFirst);
+				if(!transMap.containsKey(Integer.parseInt(line1))){
+					flowListReal.get(edge2).add(edge1);
+					transMap.put(Integer.parseInt(line1), "T" + i);
+					transMapRev.put( "T" + i , Integer.parseInt(line1));
+					entityPowerVal.put(transMap.get(Integer.parseInt(line1)), 
+							- powerRealSecondFirst);
+					entityPowerBound.put(transMap.get(Integer.parseInt(line1)), 
+							(int) (transCapConst * (- powerRealSecondFirst)));
+					transLine.put(transMap.get(Integer.parseInt(line1)), 
+							Arrays.asList(entityMap.get(edge1), entityMap.get(edge2)));
+				}
+				else{
+					entityPowerVal.put(transMap.get(Integer.parseInt(line1)), 
+							- powerRealSecondFirst + 
+							entityPowerVal.get(transMap.get(Integer.parseInt(line1))));
+					entityPowerBound.put(transMap.get(Integer.parseInt(line1)), 
+							(int) (transCapConst * (entityPowerVal.get(transMap.get(Integer.parseInt(line1))))));
+				}
 			}
 			else{
-				flowListReal.get(edge1).add(edge2);
-				transFlow.put(transMap.get(Integer.parseInt(line1)), 
-						-powerRealFirstSecond);
-				transCap.put(transMap.get(Integer.parseInt(line1)), 
-						(int) (transCapConst * (- powerRealFirstSecond)));
-				transLine.put(transMap.get(Integer.parseInt(line1)), 
-						Arrays.asList(entityMap.get(edge2), entityMap.get(edge1)));
-				
-				List<Integer> node1Vals = componentBoundAndValuesReal.get(entityMap.get(edge1));
-				node1Vals.set(3, node1Vals.get(3) - powerRealFirstSecond);
-				
-				List<Integer> node2Vals = componentBoundAndValuesReal.get(entityMap.get(edge2));
-				node2Vals.set(4, node2Vals.get(4) + powerRealSecondFirst);
-				
+				if(!transMap.containsKey(Integer.parseInt(line2))){
+					flowListReal.get(edge1).add(edge2);
+					transMap.put(Integer.parseInt(line2), "T" + i);
+					transMapRev.put( "T" + i , Integer.parseInt(line2));
+					entityPowerVal.put(transMap.get(Integer.parseInt(line2)), 
+							-powerRealFirstSecond);
+					entityPowerBound.put(transMap.get(Integer.parseInt(line2)), 
+							(int) (transCapConst * (- powerRealFirstSecond)));
+					transLine.put(transMap.get(Integer.parseInt(line2)), 
+							Arrays.asList(entityMap.get(edge2), entityMap.get(edge1)));
+				}
+				else{
+					entityPowerVal.put(transMap.get(Integer.parseInt(line2)), 
+							-powerRealFirstSecond + 
+							entityPowerVal.get(transMap.get(Integer.parseInt(line2))));
+					entityPowerBound.put(transMap.get(Integer.parseInt(line2)), 
+							(int) (transCapConst * (entityPowerVal.get(transMap.get(Integer.parseInt(line2))))));
+				}
 			}
 		}
 		scan.close();
+		
+		totalComp= indexAuxBus + indexAuxBranch;
 	}
 	// --------------------------------------------------------------------------------- //
 	
@@ -196,14 +269,13 @@ public class IIRGenerator {
 			if(flowList.get(bus).size() == 0) continue;
 			List<List<String>> minterm = new ArrayList<List<String>>();
 			for(int adjBus: flowList.get(bus)){
-				String line = Integer.toString(bus) + Integer.toString(adjBus);
+				String line = Integer.toString(adjBus) + Integer.toString(bus);
 				List<String> toBus = busInputLines.get(entityMap.get(bus));
 				List<String> fromBus = busOutputLines.get(entityMap.get(adjBus));
 				toBus.add(transMap.get(Integer.parseInt(line)));
 				fromBus.add(transMap.get(Integer.parseInt(line)));
 				minterm.add(Arrays.asList(transMap.get(Integer.parseInt(line)), entityMap.get(adjBus))); 
 			}
-			if(entityMap.get(bus).charAt(0) == 'G') minterm.add(Arrays.asList(entityMap.get(bus)));
 			IIRSol.put(entityMap.get(bus), minterm);
 		}
 	}
@@ -213,12 +285,56 @@ public class IIRGenerator {
 	// Getter Files
 	public HashMap<String, Integer> getMaps() { return entityMapRev;}
 	public HashMap<String, List<List<String>>> getIIRSol() { return IIRSol;}
-	public HashMap<String, List<Integer>> getComponentBoundAndValuesReal() { return componentBoundAndValuesReal;}
-	public HashMap<String, Integer> getTransFlow() { return transFlow;}
-	public HashMap<String, Integer> getTransCap() { return transCap;}
+	public HashMap<String, Integer> getEntityPowerVal() { return entityPowerVal;}
+	public HashMap<String, Integer> getEntityPowerBound() { return entityPowerBound;}
 	public HashMap<String, List<String>> getToBus() { return busInputLines;}
 	public HashMap<String, List<String>> getFromBus() { return busOutputLines;}
 	public HashMap<String, List<String>> getTransLine() { return transLine;}
+	public int getTotalComp() { return totalComp;}
 	// --------------------------------------------------------------------------------- //
+	
+	// Compute maximum path length in the graph
+	public int getMaximumPathLength(){
+		HashMap<List<Integer>, Integer> shortestPath = new HashMap<List<Integer>, Integer>();
+		int maxPathLength = 0;
+		int maxValue = 10000;
+		//Initialization
+		for(int v: vertex){
+			for(int u: vertex){
+				if(v == u) shortestPath.put(Arrays.asList(v, v), 0);
+				else shortestPath.put(Arrays.asList(v, u), maxValue); // if there is no edge the length is maxVal
+			}
+			List<Integer> vWeights = new ArrayList<Integer>(Collections.nCopies(flowListReal.get(v).size(), 1));
+			int index = 0;
+			for(int u: flowListReal.get(v)){
+				shortestPath.put(Arrays.asList(v,u), vWeights.get(index));
+				index ++;
+			}
+		}
+		
+		//Compute All Pair Shortest Path
+		for(int k: vertex){	
+			for(int i: vertex){
+				for(int j: vertex){
+					if(shortestPath.get(Arrays.asList(i,j)) >
+						shortestPath.get(Arrays.asList(i,k)) + shortestPath.get(Arrays.asList(k,j)))	
+						shortestPath.replace(Arrays.asList(i,j),
+								shortestPath.get(Arrays.asList(i,k)) + shortestPath.get(Arrays.asList(k,j)));
+				}
+			}
+		}
+		
+		// get the maximum path length
+		for(int i: vertex){
+			for(int j: vertex){
+				if(maxPathLength < shortestPath.get(Arrays.asList(i,j))){
+					if(shortestPath.get(Arrays.asList(i,j)) == maxValue) continue;
+					maxPathLength = shortestPath.get(Arrays.asList(i,j));
+				}
+			}
+		}
+		
+		return maxPathLength;
+	}
 	
 }

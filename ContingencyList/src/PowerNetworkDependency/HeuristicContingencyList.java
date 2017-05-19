@@ -22,9 +22,8 @@ public class HeuristicContingencyList {
 		K = KVal;
 		entityLabeltoIndexMap = object.getMaps();
 		IIRs = object.getIIRSol();
-		componentBoundAndValuesReal = object.getComponentBoundAndValuesReal();
-		transFlow = object.getTransFlow();
-		transCap = object.getTransCap();
+		transFlow = object.getEntityPowerVal();
+		transCap = object.getEntityPowerBound();
 		busInputLines = object.getToBus();
 		busOutputLines = object.getFromBus();
 		transLine = object.getTransLine();
