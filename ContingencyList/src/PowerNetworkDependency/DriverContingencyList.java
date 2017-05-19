@@ -6,7 +6,7 @@ import java.util.List;
 
 public class DriverContingencyList {
 	public static void main(String[] args) throws IOException{
-		String caseFile = "case57";
+		String caseFile = "case9";
 		
 		long startTime = System.nanoTime();
 		IIRGenerator obj = new IIRGenerator(caseFile, 1);
