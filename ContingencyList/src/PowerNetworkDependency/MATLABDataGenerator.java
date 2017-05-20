@@ -11,33 +11,6 @@ import matlabcontrol.MatlabProxyFactory;
 
 public class MATLABDataGenerator {
 	
-	// list of case files for which data is to be generated
-	public static final String[] allCaseFiles = {
-			"case118",
-			"case1354pegase",
-			"case2383wp",
-			"case24_ieee_rts",
-			"case3375wp", 
-			"case9target",
-			"case2736sp", 
-			"case30", 
-			"case39", 
-			"case14", 
-			"case2737sop", 
-			"case300", 
-			"case6ww",	
-			"case145", 
-			"case2746wop", 
-			"case3120sp", 
-			"case5", 
-			"case89pegase",
-			"case2746wp", 
-			"case30Q", 
-			"case57", 
-			"case9", 
-			"case9Q",
-			"case30pwl" };
-	
 	// Invoke MATLAB code to generate data
 	MATLABDataGenerator(String caseVal) throws MatlabConnectionException, MatlabInvocationException{
 		//Get Data from MATLAB
@@ -60,11 +33,5 @@ public class MATLABDataGenerator {
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
-	}
-	
-	public static void main(String[] args) throws MatlabConnectionException, MatlabInvocationException{
-		for(String file: allCaseFiles){
-			MATLABDataGenerator obj = new MATLABDataGenerator(file);
-		}
 	}
 }

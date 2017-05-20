@@ -1,6 +1,5 @@
 package PowerNetworkDependency;
 
-import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -377,19 +376,6 @@ public class ILPContingencyList {
 		}
 		
 		return r;
-	}
-
-	public static void main(String args[]) throws FileNotFoundException {
-		long startTime = System.currentTimeMillis();
-		IIRGenerator obj = new IIRGenerator("case118", 1);
-		obj.generateIIRForSolutions(1);
-		int maxPathLength = obj.getMaximumPathLength();
-		ILPContingencyList ex = new ILPContingencyList(4, obj, maxPathLength);
-		ex.optimize(obj, 1, new ArrayList<String>());
-		long endTime   = System.currentTimeMillis();
-		long totalTime = endTime - startTime;
-		ex.printReport();
-		System.out.println(totalTime / 1000.0 + " seconds");
 	}
 }
 
