@@ -4,9 +4,9 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Scanner;
+import java.util.Stack;
 import java.util.List;
 
 public class IIRGenerator {
@@ -16,7 +16,6 @@ public class IIRGenerator {
 	private final int numBuses;
 	private final int numTimeSteps;
 	private final int numBranch;
-	private int totalComp;
 	
 	// the constant multiplied with transmission line flow to get the upper bound on the line
 	private final double transCapConst = 1.5; 
@@ -254,8 +253,6 @@ public class IIRGenerator {
 			}
 		}
 		scan.close();
-		
-		totalComp= indexAuxBus + indexAuxBranch;
 	}
 	// --------------------------------------------------------------------------------- //
 	
@@ -290,51 +287,61 @@ public class IIRGenerator {
 	public HashMap<String, List<String>> getToBus() { return busInputLines;}
 	public HashMap<String, List<String>> getFromBus() { return busOutputLines;}
 	public HashMap<String, List<String>> getTransLine() { return transLine;}
-	public int getTotalComp() { return totalComp;}
+	public int getTotalComp() { return entityPowerVal.size();}
 	// --------------------------------------------------------------------------------- //
 	
 	// Compute maximum path length in the graph
 	public int getMaximumPathLength(){
-		HashMap<List<Integer>, Integer> shortestPath = new HashMap<List<Integer>, Integer>();
+		Stack<Integer> st = new Stack<Integer>(); // stores the topologically sorted vertex
+		boolean[] visited = new boolean[vertex.size()];
+		// do topological sort
+		for(int node: vertex)
+			if(!visited[node])
+				topologicalSortUtil(node, visited, st);
+		
+		List<Integer> order = new ArrayList<Integer>();
+		while(!st.isEmpty())
+			order.add(st.pop());
+		
 		int maxPathLength = 0;
-		int maxValue = 10000;
-		//Initialization
-		for(int v: vertex){
-			for(int u: vertex){
-				if(v == u) shortestPath.put(Arrays.asList(v, v), 0);
-				else shortestPath.put(Arrays.asList(v, u), maxValue); // if there is no edge the length is maxVal
-			}
-			List<Integer> vWeights = new ArrayList<Integer>(Collections.nCopies(flowListReal.get(v).size(), 1));
-			int index = 0;
-			for(int u: flowListReal.get(v)){
-				shortestPath.put(Arrays.asList(v,u), vWeights.get(index));
-				index ++;
-			}
-		}
+		int minValue = -10000;
 		
-		//Compute All Pair Shortest Path
-		for(int k: vertex){	
-			for(int i: vertex){
-				for(int j: vertex){
-					if(shortestPath.get(Arrays.asList(i,j)) >
-						shortestPath.get(Arrays.asList(i,k)) + shortestPath.get(Arrays.asList(k,j)))	
-						shortestPath.replace(Arrays.asList(i,j),
-								shortestPath.get(Arrays.asList(i,k)) + shortestPath.get(Arrays.asList(k,j)));
+		for(int node: vertex){
+			// Initialize all distance to minValue and source (node) to 0
+			int[] dist = new int[vertex.size()];
+			for(int v: vertex)
+				dist[v] = minValue;
+			dist[node] = 0;
+			
+			for(int v: order){
+				if (dist[v] != minValue){
+		          for (int u : flowListReal.get(v)){
+		             if (dist[u] < dist[v] + 1){
+		                dist[u] = dist[v] + 1;
+		                if(maxPathLength < dist[u])
+		            		maxPathLength = dist[u];
+		             }
+		          }
 				}
-			}
-		}
-		
-		// get the maximum path length
-		for(int i: vertex){
-			for(int j: vertex){
-				if(maxPathLength < shortestPath.get(Arrays.asList(i,j))){
-					if(shortestPath.get(Arrays.asList(i,j)) == maxValue) continue;
-					maxPathLength = shortestPath.get(Arrays.asList(i,j));
-				}
-			}
+			}	
 		}
 		
 		return maxPathLength;
+	}
+	
+	// Topological Sort
+	void topologicalSortUtil(int v, boolean visited[], Stack<Integer> st)
+	{
+	    // Mark the current node as visited
+	    visited[v] = true;
+	 
+	    // Recur for all the vertices adjacent to this vertex
+	    for (int node: flowListReal.get(v))
+	        if (!visited[node])
+	            topologicalSortUtil(node, visited, st);
+	 
+	    // Push current vertex to stack which stores topological sort
+	    st.push(v);
 	}
 	
 }

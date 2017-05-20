@@ -26,7 +26,7 @@ public class ILPContingencyList {
 	IloCplex cplex;
 	private IloIntVar[][] x;	
 	private IloIntVar[][] c;
-	private IloIntVar[][] y;
+	private IloNumVar[][] y;
 	private double constM = 100.0;
 		
 	public ILPContingencyList(int KVal, IIRGenerator object, int maxPathLength) {
@@ -38,6 +38,7 @@ public class ILPContingencyList {
 			entityBound = new HashMap<Integer, Integer>();
 			IIRs = new HashMap<String, List<String>>();
 			int eIndex = 0;
+			
 			for(String str: object.getEntityPowerVal().keySet()){
 				entityLabeltoIndexMap.put(str, eIndex);
 				entityIndextoLabelMap.put(eIndex, str);
@@ -83,18 +84,19 @@ public class ILPContingencyList {
 			K = KVal;
 			x = new IloIntVar[XCOUNT][STEPS];
 			c = new IloIntVar[CCOUNT][STEPS];
-			y = new IloIntVar[XCOUNT][STEPS];
+			y = new IloNumVar[XCOUNT][STEPS];
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
 	
-	public void optimize(IIRGenerator object) {
+	public void optimize(IIRGenerator object, int num, List<String> initFailed) {
 		try {
 			createXVariables();
 			createCVariables();
 			createYVariables();
 			createConstraints(object);
+			createKConstraint(num, initFailed);
 			createObjective();
 			cplex.solve();	
 		} catch (Exception e) {
@@ -123,7 +125,7 @@ public class ILPContingencyList {
 	public void createYVariables() {
 		try {
 			for (int i = 0; i < XCOUNT; ++i) 			
-				y[i] = cplex.intVarArray(STEPS, 0, entityBound.get(i));
+				y[i] = cplex.numVarArray(STEPS, 0, entityBound.get(i));
 		} catch (Exception e) {
 			System.out.println(e.getMessage());
 		}	
@@ -140,18 +142,33 @@ public class ILPContingencyList {
 		}
 	}
 
-	public void createConstraints(IIRGenerator obj) {
-		try {
-			// time step constraints	
-			for (int i = 0; i < XCOUNT; ++i)
-				for (int t = 1; t < STEPS;t++) 
-					cplex.addGe(x[i][t], x[i][t-1]);
-		
+	public void createKConstraint(int num, List<String> initFailed) throws IloException{
+		// Constraint for ILP
+		if(num == 1){
 			// K Constraint
 			IloNumExpr expr = cplex.constant(0);
 			for (int i = 0; i < XCOUNT; ++ i)
 				expr = cplex.sum(expr, x[i][0]);
-			cplex.addLe(expr, K);	
+			cplex.addLe(expr, K);
+		}
+		// Constraint for Heuristic
+		else{
+			for(int i = 0; i < XCOUNT; ++i){
+				if(initFailed.contains(entityIndextoLabelMap.get(i)))
+					cplex.addEq(x[i][0],1);
+				else
+					cplex.addEq(x[i][0],0);
+			}
+		}
+	}
+	
+	public void createConstraints(IIRGenerator obj) {
+		try {
+			IloNumExpr expr = cplex.constant(0);
+			// time step constraints	
+			for (int i = 0; i < XCOUNT; ++i)
+				for (int t = 1; t < STEPS;t++) 
+					cplex.addGe(x[i][t], x[i][t-1]);
 			
 			// Initial flow value and flow values of load and neutral bus constraint
 			for (int i = 0; i < XCOUNT; ++ i) { 
@@ -364,11 +381,11 @@ public class ILPContingencyList {
 
 	public static void main(String args[]) throws FileNotFoundException {
 		long startTime = System.currentTimeMillis();
-		IIRGenerator obj = new IIRGenerator("case9", 1);
+		IIRGenerator obj = new IIRGenerator("case118", 1);
 		obj.generateIIRForSolutions(1);
 		int maxPathLength = obj.getMaximumPathLength();
-		ILPContingencyList ex = new ILPContingencyList(5, obj, maxPathLength);
-		ex.optimize(obj);
+		ILPContingencyList ex = new ILPContingencyList(4, obj, maxPathLength);
+		ex.optimize(obj, 1, new ArrayList<String>());
 		long endTime   = System.currentTimeMillis();
 		long totalTime = endTime - startTime;
 		ex.printReport();
