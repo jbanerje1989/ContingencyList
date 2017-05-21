@@ -33,6 +33,7 @@ public class HeuristicContingencyList {
 			
 			for(String entity: entityLabeltoIndexMap.keySet()){
 				if(failedEntities.contains(entity)) continue;
+				if(entity.charAt(0) == 'T') continue;
 				
 				List<Integer> result = computeCascade(entity);
 				
@@ -50,8 +51,8 @@ public class HeuristicContingencyList {
 					}
 				}
 			}
-			
-			initFailedEntities.add(entityToKill);
+		
+			if(!entityToKill.isEmpty()) initFailedEntities.add(entityToKill);
 			IIRs = computeCascadeIIR(entityToKill, failedEntities);
 		}
 	}

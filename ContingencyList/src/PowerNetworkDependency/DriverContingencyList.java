@@ -6,7 +6,7 @@ import java.util.List;
 
 public class DriverContingencyList {
 	public static void main(String[] args) throws IOException{
-		String caseFile = "case3120sp";
+		String caseFile = "case300";
 		
 		long startTime = System.nanoTime();
 		IIRGenerator obj = new IIRGenerator(caseFile, 1);
@@ -47,9 +47,10 @@ public class DriverContingencyList {
 			HeuristicContingencyList heuObject = new HeuristicContingencyList(contingencyListK, obj);
 			heuObject.computeContingencyList();
 			endTime   = System.nanoTime();
-			ilpObject.optimize(obj, 2, heuObject.getInitFailedEntities());
+			ILPContingencyList ilpObject2 = new ILPContingencyList(contingencyListK, obj, maxPathLength);
+			ilpObject2.optimize(obj, 2, heuObject.getInitFailedEntities());
 			totalTime = endTime - startTime;
-			compDeadHeu.add(ilpObject.printReport());
+			compDeadHeu.add(ilpObject2.printReport());
 			heuExecTime.add(totalTime / Math.pow(10,9));
 		}
 		

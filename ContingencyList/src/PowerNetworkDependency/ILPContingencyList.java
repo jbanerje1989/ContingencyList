@@ -85,6 +85,7 @@ public class ILPContingencyList {
 			c = new IloIntVar[CCOUNT][STEPS];
 			y = new IloNumVar[XCOUNT][STEPS];
 		} catch (Exception e) {
+			System.out.println("Hello0");
 			e.printStackTrace();
 		}
 	}
@@ -141,23 +142,28 @@ public class ILPContingencyList {
 		}
 	}
 
-	public void createKConstraint(int num, List<String> initFailed) throws IloException{
-		// Constraint for ILP
-		if(num == 1){
-			// K Constraint
-			IloNumExpr expr = cplex.constant(0);
-			for (int i = 0; i < XCOUNT; ++ i)
-				expr = cplex.sum(expr, x[i][0]);
-			cplex.addLe(expr, K);
-		}
-		// Constraint for Heuristic
-		else{
-			for(int i = 0; i < XCOUNT; ++i){
-				if(initFailed.contains(entityIndextoLabelMap.get(i)))
-					cplex.addEq(x[i][0],1);
-				else
-					cplex.addEq(x[i][0],0);
+	public void createKConstraint(int num, List<String> initFailed) {
+		try{
+			if(num == 1){
+				// K Constraint
+				IloNumExpr expr = cplex.constant(0);
+				for (int i = 0; i < XCOUNT; ++ i)
+					expr = cplex.sum(expr, x[i][0]);
+				cplex.addLe(expr, K);
 			}
+			// Constraint for Heuristic
+			else{
+				IloNumExpr expr = cplex.constant(0);
+				for(int i = 0; i < XCOUNT; ++i){
+					expr = cplex.sum(expr, x[i][0]);
+					if(initFailed.contains(entityIndextoLabelMap.get(i)))
+						cplex.addGe(x[i][0],0.1);
+				}
+				cplex.addLe(expr, K);
+			}
+		}
+		catch(Exception e){
+			System.out.println("Error in K constraint");
 		}
 	}
 	
@@ -198,11 +204,11 @@ public class ILPContingencyList {
 			for(String entity: entityLabeltoIndexMap.keySet()){
 				if(entity.charAt(0) == 'T') continue;
 				else if(entity.charAt(0) == 'G'){
-					for(int t = 1; t < STEPS; ++t){
+					for(int t = 1; t < STEPS-1; ++t){
 						expr = cplex.constant(0);
 						IloNumExpr expr2 = cplex.constant(0);
 						for(String str: obj.getFromBus().get(entity)){
-							cplex.addEq(x[entityLabeltoIndexMap.get(str)][t], 
+							cplex.addLe(x[entityLabeltoIndexMap.get(str)][t], 
 								x[entityLabeltoIndexMap.get(entity)][t]);
 						
 							expr = cplex.constant(0);
@@ -222,9 +228,8 @@ public class ILPContingencyList {
 					for(int t = 1; t < STEPS-1; ++t){
 						expr = cplex.constant(0);
 						IloNumExpr expr2 = cplex.constant(0);
-						IloNumExpr expr3 = cplex.constant(0);
 						for(String str: obj.getFromBus().get(entity)){
-							cplex.addEq(x[entityLabeltoIndexMap.get(str)][t], 
+							cplex.addLe(x[entityLabeltoIndexMap.get(str)][t], 
 								x[entityLabeltoIndexMap.get(entity)][t]);
 							
 							expr = cplex.constant(0);
@@ -232,7 +237,6 @@ public class ILPContingencyList {
 							expr = cplex.prod(expr, entityBound.get(entityLabeltoIndexMap.get(str)));
 							expr = cplex.diff(expr,y[entityLabeltoIndexMap.get(str)][t]);
 							expr2 = cplex.sum(expr2,expr);
-							expr3 = cplex.sum(expr3, expr);
 						}
 						for(String str: obj.getToBus().get(entity)){
 							expr = cplex.constant(0);
@@ -240,25 +244,20 @@ public class ILPContingencyList {
 							expr = cplex.prod(expr, entityBound.get(entityLabeltoIndexMap.get(str)));
 							expr = cplex.diff(y[entityLabeltoIndexMap.get(str)][t],expr);
 							expr2 = cplex.sum(expr2,expr);
-							expr3 = cplex.sum(expr3,expr);
 						}
 						expr = cplex.constant(0);
 						expr = cplex.sum(expr, x[entityLabeltoIndexMap.get(entity)][t+1]);
 						expr = cplex.prod(expr, entityBound.get(entityLabeltoIndexMap.get(entity)));
 						expr = cplex.diff(y[entityLabeltoIndexMap.get(entity)][t],expr);
 						cplex.addGe(expr, expr2);
-						
-						// to kill the load if its load demand is not satisfied
-						expr3 = cplex.diff(entityBound.get(entityLabeltoIndexMap.get(entity)), expr3);
-						cplex.addLe(x[entityLabeltoIndexMap.get(entity)][t], expr3);
 					}
 				}
 				else{
-					for(int t = 1; t < STEPS; ++t){
+					for(int t = 1; t < STEPS-1; ++t){
 						expr = cplex.constant(0);
 						IloNumExpr expr2 = cplex.constant(0);
 						for(String str: obj.getFromBus().get(entity)){
-							cplex.addEq(x[entityLabeltoIndexMap.get(str)][t], 
+							cplex.addLe(x[entityLabeltoIndexMap.get(str)][t], 
 								x[entityLabeltoIndexMap.get(entity)][t]);
 						
 							expr = cplex.constant(0);
@@ -347,9 +346,10 @@ public class ILPContingencyList {
 				if (cplex.getValue(x[i][STEPS-1]) >0)
 					compnentsDead ++;
 			
-			for(int i = 0; i < XCOUNT; i++)			 
+			for(int i = 0; i < XCOUNT; i++)
 				if (cplex.getValue(x[i][0]) >0)
 					componenetsKilledInitially ++;
+				
 			
 			System.out.println("Time Steps       : " + STEPS);
 			System.out.println("Total Components : " + XCOUNT);
